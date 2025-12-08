@@ -1,239 +1,7 @@
-
-#target photoshop
-#include './node_modules/lodash/lodash.js';
-
-
-function ExportLayerPicture() {
-  this.app = app
-  this.doc = this.app.activeDocument
-  this.exportFolder = this.getExportFolder()
-  this.layers = []
-}
-
-ExportLayerPicture.prototype.validDocuments = function () {
-  if (this.app.documents.length === 0) throw '请先打开一个文档！'
-}
-
-ExportLayerPicture.prototype.getExportFolder = function () {
-  var docPath = this.doc.path
-  var docName = this.doc.name.replace(/\.[^\.]+$/, '')
-  // 创建导出文件夹
-  var exportFolder = new Folder(docPath + "/" + docName + "_layers")
-  if (!exportFolder.exists) exportFolder.create()
-  return exportFolder
-}
-
-// 递归收集所有图层对象
-ExportLayerPicture.prototype.collectLayers = function (container, result, path) {
-  for (var i = 0; i < container.layers.length; i++) {
-    var layer = container.layers[i]
-    path = path || ''
-    if (path) path = path + '/'
-    var currentPath = path + layer.name
-
-    if (layer.typename === "LayerSet") {
-      // 图层组，递归搜索
-      this.collectLayers(layer, result, currentPath)
-      continue
-    }
-    if (layer.kind === LayerKind.SMARTOBJECT) {
-      this.layers.push(new SmartObject({
-        layer: layer,
-        currentPath: currentPath,
-        parent: this
-      }))
-      continue
-    }
-
-    this.layers.push(new NormalObject({
-      layer: layer,
-      currentPath: currentPath,
-      parent: this
-    }))
-  }
-}
-
-
-ExportLayerPicture.prototype.uniqLayers = function () {
-  var uniqLayers = []
-  var layers = this.layers
-  for (var i = 0; i < layers.length; i++) {
-    var item = layers[i]
-    var key = item.key
-    var fIndex = _.findIndex(uniqLayers, (function (sItem) {
-      var sKey = sItem.key
-      return sKey == key
-    })
-  )
-    if (fIndex < 0) {
-      uniqLayers.push(item)
-    }
-  }
-  this.layers = uniqLayers
-}
-
-ExportLayerPicture.prototype.export = function () {
-  var layers = this.layers
-  for (var i = 0; i < layers.length; i++) {
-    var layer = layers[i]
-    layer.savePNG()
-  }
-}
-
-ExportLayerPicture.prototype.action = function () {
-  try {
-    this.validDocuments()
-    this.collectLayers(this.doc, this.layers)
-    this.uniqLayers()
-    if (!this.layers.length) throw '文档中没有找到对象'
-    this.export()
-    alert("导出完成！\n共导出 " + this.layers.length + " 个智能对象\n保存位置: " + this.exportFolder)
-  } catch (err) {
-    alert(err)
-  }
-}
-
-
-function NormalObject(option) {
-  this.parent = option.parent
-  this.layer = option.layer
-  this.currentPath = option.currentPath
-  this.app = this.parent.app
-  this.doc = this.parent.doc
-  this.exportFolder = this.parent.exportFolder
-  this.type = 'normalObject'
-  this.id = this.layer.id
-  this.key = this.type + '_' + this.id
-}
-
-NormalObject.prototype.duplicateLayerToNewDoc = function () {
-  var app = this.parent.app
-  var doc = this.parent.doc
-  var layer = this.layer
-  var bounds = layer.bounds
-  var width = bounds[2].as("px") - bounds[0].as("px")
-  var height = bounds[3].as("px") - bounds[1].as("px")
-
-  if (width <= 0 || height <= 0) {
-    width = doc.width.as("px")
-    height = doc.height.as("px")
-  }
-
-  // 创建新文档
-  var newDoc = app.documents.add(
-    UnitValue(width, "px"),
-    UnitValue(height, "px"),
-    doc.resolution,
-    "export_temp",
-    NewDocumentMode.RGB,
-    DocumentFill.TRANSPARENT
-  )
-
-  // 复制图层
-  app.activeDocument = doc
-  var dupLayer = layer.duplicate(newDoc, ElementPlacement.PLACEATBEGINNING)
-
-  // 移动位置
-  app.activeDocument = newDoc
-  dupLayer.translate(
-    UnitValue(-bounds[0].as("px"), "px"),
-    UnitValue(-bounds[1].as("px"), "px")
-  )
-
-  // 裁剪
-  try {
-    newDoc.trim(TrimType.TRANSPARENT)
-  } catch (e) {
-  }
-
-  // 合并
-  newDoc.flatten()
-
-  return newDoc
-}
-
-NormalObject.prototype.savePNG = function () {
-  var layer = this.layer
-  var folder = this.exportFolder
-  var fileName = layer.name
-  var newDoc = this.duplicateLayerToNewDoc()
-  var filePath = folder + "/" + fileName + '.png'
-  var file = new File(filePath)
-  var opts = new PNGSaveOptions()
-  opts.compression = 6
-  opts.interlaced = false
-  newDoc.saveAs(file, opts, true, Extension.LOWERCASE)
-  newDoc.close(SaveOptions.DONOTSAVECHANGES)
-}
-
-
-function SmartObject(option) {
-  this.parent = option.parent
-  this.layer = option.layer
-  this.currentPath = option.currentPath
-  this.doc = this.parent.doc
-  this.exportFolder = this.parent.exportFolder
-  var info = this.getInfo()
-  this.smartLayerName = info.fileName
-  this.smartObjSourceId = info.smartObjSourceId
-  this.id = this.layer.id
-  this.type = 'smartObject'
-  this.key = this.type + '_' + this.smartObjSourceId
-}
-
-SmartObject.prototype.getInfo = function () {
-  var so = {
-    fileName: '',
-    smartObjSourceId: ''
-  }
-  this.doc.activeLayer = this.layer
-  var ref = new ActionReference()
-  ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"))
-  var desc = executeActionGet(ref)
-  var smartObjSourceId = stringIDToTypeID("placedLayerExportContents")
-  var soDesc = safeGetObject(desc, stringIDToTypeID("smartObject"))
-  so.filePath = safeGetString(soDesc, stringIDToTypeID("fileReference"))
-
-  if (so.filePath) {
-    var parts = so.filePath.replace(/\\/g, "/").split("/")
-    so.fileName = parts[parts.length - 1]
-  }
-  so.smartObjSourceId = smartObjSourceId
-  return so
-}
-
-SmartObject.prototype.savePNG = function () {
-  var layer = this.layer
-  var folder = this.exportFolder
-  var fileName = sanitizeFileName(this.smartLayerName)
-  var fullPath = folder + "/" + fileName
-  this.doc.activeLayer = layer
-  // 打开智能对象
-  var idplacedLayerEditContents = stringIDToTypeID("placedLayerEditContents")
-  var desc = new ActionDescriptor()
-  executeAction(idplacedLayerEditContents, desc, DialogModes.NO)
-  var soDoc = app.activeDocument
-
-  // 根据格式保存
-  var saveFile = new File(fullPath)
-
-  var pngOpts = new PNGSaveOptions()
-  pngOpts.compression = 6
-  pngOpts.interlaced = false
-  soDoc.saveAs(new File(saveFile + ".png"), pngOpts, true, Extension.LOWERCASE)
-
-  // 关闭智能对象文档（不保存更改）
-  soDoc.close(SaveOptions.DONOTSAVECHANGES)
-}
-
-
-// 清理文件名
-function sanitizeFileName(name) {
-  // 移除非法字符
-  // return name.replace(/[\\/:*?"<>|]/g, "_");
-  return name.replace(/[\\\/:*?"<>|]/g, "_").replace(/\s+/g, "_").replace(/\./, '_')
-}
-
+#include '../../node_modules/lodash/lodash.js'
+#include './utils.jsx'
+#include './get.jsx'
+#include './json.jsx'
 
 function Parser() {
   this.app = app
@@ -350,13 +118,10 @@ Parser.prototype.saveJSON = function () {
   var fileName = 'json'
   var filePath = folder + "/" + fileName + '.json'
   var file = new File(filePath)
-  if (file) {
-    file.encoding = "UTF-8"
-    file.open("w")
-    file.write(toJSON(data, "  "))
-    file.close()
-    alert("JSON 已保存:\n" + file.fsName)
-  }
+  file.encoding = "UTF-8"
+  file.open("w")
+  file.write(toJSON(data, "  "))
+  file.close()
 }
 
 Parser.prototype.action = function () {
@@ -366,15 +131,6 @@ Parser.prototype.action = function () {
   } catch (err) {
     alert(err)
   }
-}
-
-main()
-
-function main() {
-  var parserInstance = new Parser()
-  parserInstance.action()
-  var exporter = new ExportLayerPicture()
-  exporter.action()
 }
 
 
@@ -393,60 +149,6 @@ function pxVal(v) {
     return 0
   }
 }
-
-function r2(n) {
-  return Math.round(n * 100) / 100
-}
-
-function r1(n) {
-  return Math.round(n * 10) / 10
-}
-
-function dist(a, b) {
-  return Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2))
-}
-
-// 安全获取函数
-function safeGetString(desc, key) {
-  try {
-    if (desc.hasKey(key)) return desc.getString(key)
-  } catch (e) {
-  }
-  return ""
-}
-
-function safeGetDouble(desc, key) {
-  try {
-    if (desc.hasKey(key)) return desc.getDouble(key)
-  } catch (e) {
-  }
-  return 0
-}
-
-function safeGetBoolean(desc, key) {
-  try {
-    if (desc.hasKey(key)) return desc.getBoolean(key)
-  } catch (e) {
-  }
-  return false
-}
-
-function safeGetObject(desc, key) {
-  try {
-    if (desc.hasKey(key)) return desc.getObjectValue(key)
-  } catch (e) {
-  }
-  return null
-}
-
-function safeGetList(desc, key) {
-  try {
-    if (desc.hasKey(key)) return desc.getList(key)
-  } catch (e) {
-  }
-  return null
-}
-
 
 // ========== 核心：解析智能对象 ==========
 function parseSmartObject(layer, layerBounds) {
@@ -714,27 +416,6 @@ function parseTextLayer(layer) {
   return t
 }
 
-// 辅助函数
-function getLayerType(layer) {
-  if (layer.typename === "LayerSet") return "Group"
-  try {
-    switch (layer.kind) {
-      case LayerKind.NORMAL:
-        return "Normal"
-      case LayerKind.TEXT:
-        return "Text"
-      case LayerKind.SMARTOBJECT:
-        return "SmartObject"
-      case LayerKind.SOLIDFILL:
-        return "Shape"
-      default:
-        return "Other"
-    }
-  } catch (e) {
-    return "Unknown"
-  }
-}
-
 function getColorMode(mode) {
   switch (mode) {
     case DocumentMode.RGB:
@@ -763,43 +444,6 @@ function rgbToHex(rgb) {
   }
 
   return "#" + hex(rgb.red) + hex(rgb.green) + hex(rgb.blue)
-}
-
-
-// 保存文件
-function saveJSON(data) {
-
-}
-
-
-// JSON 序列化
-function toJSON(obj, indent) {
-  return _json(obj, indent || "", "")
-}
-
-function _json(val, indent, cur) {
-  if (val === null || val === undefined) return "null"
-  var t = typeof val
-  if (t === "string") {
-    return '"' + val.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r") + '"'
-  }
-  if (t === "number") return isFinite(val) ? String(val) : "null"
-  if (t === "boolean") return String(val)
-  if (val instanceof Array) {
-    if (val.length === 0) return "[]"
-    var arr = [], ni = cur + indent
-    for (var i = 0; i < val.length; i++) arr.push(ni + _json(val[i], indent, ni))
-    return "[\n" + arr.join(",\n") + "\n" + cur + "]"
-  }
-  if (t === "object") {
-    var props = [], ni = cur + indent
-    for (var k in val) {
-      if (val.hasOwnProperty(k)) props.push(ni + '"' + k + '": ' + _json(val[k], indent, ni))
-    }
-    if (props.length === 0) return "{}"
-    return "{\n" + props.join(",\n") + "\n" + cur + "}"
-  }
-  return "null"
 }
 
 
