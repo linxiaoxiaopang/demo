@@ -9,21 +9,21 @@ function sanitizeFileName(name) {
 
 // 辅助函数
 function getLayerType(layer) {
-  if (layer.typename === "LayerSet") return "Group"
+  if (layer.typename === "LayerSet") return "group"
   try {
     switch (layer.kind) {
       case LayerKind.NORMAL:
-        return "Normal"
+        return "normal"
       case LayerKind.TEXT:
-        return "Text"
+        return "text"
       case LayerKind.SMARTOBJECT:
-        return "SmartObject"
+        return "smartObject"
       case LayerKind.SOLIDFILL:
-        return "Shape"
+        return "shape"
       default:
-        return "Other"
+        return "other"
     }
   } catch (e) {
-    return "Unknown"
+    return "unknown"
   }
 }

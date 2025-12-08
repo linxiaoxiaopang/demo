@@ -156,7 +156,7 @@ NormalObject.prototype.savePNG = function () {
   var folder = this.exportFolder
   var fileName = layer.name
   var newDoc = this.duplicateLayerToNewDoc()
-  var filePath = folder + "/" + fileName + '.png'
+  var filePath = folder + "/" + this.key + '_' + fileName + '.png'
   var file = new File(filePath)
   var opts = new PNGSaveOptions()
   opts.compression = 6
@@ -205,7 +205,7 @@ SmartObject.prototype.savePNG = function () {
   var layer = this.layer
   var folder = this.exportFolder
   var fileName = sanitizeFileName(this.smartLayerName)
-  var fullPath = folder + "/" + fileName
+  var fullPath = folder + '/' + this.key + '_' + fileName
   this.doc.activeLayer = layer
   // 打开智能对象
   var idplacedLayerEditContents = stringIDToTypeID("placedLayerEditContents")

@@ -1,5 +1,6 @@
 #include '../../node_modules/lodash/lodash.js'
 #include './utils.jsx'
+#include './math.jsx'
 #include './get.jsx'
 #include './json.jsx'
 
@@ -66,9 +67,12 @@ Parser.prototype.parseLayer = function (layer, depth) {
     visible: layer.visible,
     opacity: Math.round(layer.opacity),
     blendMode: getBlendMode(layer),
-    depth: depth
+    depth: depth,
+    id: layer.id,
+    key: null
   }
 
+  info.key = info.type + '_' + info.id
   // 边界
   try {
     var b = layer.bounds
@@ -90,6 +94,7 @@ Parser.prototype.parseLayer = function (layer, depth) {
   try {
     if (layer.kind === LayerKind.SMARTOBJECT) {
       info.smartObject = parseSmartObject(layer, info.bounds)
+      info.key = info.type + '_' +  info.smartObject.id
     }
   } catch (e) {
   }
@@ -115,7 +120,7 @@ Parser.prototype.parseLayer = function (layer, depth) {
 Parser.prototype.saveJSON = function () {
   var data = this.result
   var folder = this.exportFolder
-  var fileName = 'json'
+  var fileName = 'layers'
   var filePath = folder + "/" + fileName + '.json'
   var file = new File(filePath)
   file.encoding = "UTF-8"
@@ -158,6 +163,7 @@ function parseSmartObject(layer, layerBounds) {
     fileName: "",
     originalSize: null,
     currentSize: null,
+    id: null,
     transform: {
       scaleX: 100,
       scaleY: 100,
@@ -173,6 +179,8 @@ function parseSmartObject(layer, layerBounds) {
     var ref = new ActionReference()
     ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"))
     var desc = executeActionGet(ref)
+    so.id = stringIDToTypeID("placedLayerExportContents")
+
 
     // 智能对象基本信息
     var soDesc = safeGetObject(desc, stringIDToTypeID("smartObject"))
