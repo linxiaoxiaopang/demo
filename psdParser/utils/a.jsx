@@ -1,3 +1,0 @@
-function abc() {
-  alert('abc')
-}
