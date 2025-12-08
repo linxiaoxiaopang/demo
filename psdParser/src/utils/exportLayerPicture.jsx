@@ -1,6 +1,7 @@
 #include '../../node_modules/lodash/lodash.js'
 #include './utils.jsx'
 #include './get.jsx'
+#include './md5.jsx'
 
 function ExportLayerPicture() {
   this.app = app
@@ -134,10 +135,10 @@ NormalObject.prototype.duplicateLayerToNewDoc = function () {
 
   // 移动位置
   app.activeDocument = newDoc
-  dupLayer.translate(
-    UnitValue(-bounds[0].as("px"), "px"),
-    UnitValue(-bounds[1].as("px"), "px")
-  )
+  // dupLayer.translate(
+  //   UnitValue(-bounds[0].as("px"), "px"),
+  //   UnitValue(-bounds[1].as("px"), "px")
+  // )
 
   // 裁剪
   try {
@@ -189,15 +190,16 @@ SmartObject.prototype.getInfo = function () {
   var ref = new ActionReference()
   ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"))
   var desc = executeActionGet(ref)
-  var smartObjSourceId = stringIDToTypeID("placedLayerExportContents")
+  // var smartObjSourceId = stringIDToTypeID("placedLayerExportContents")
   var soDesc = safeGetObject(desc, stringIDToTypeID("smartObject"))
+   // 获取文档 ID（同一源文件的所有实例共享此 ID）
+  so.smartObjSourceId = md5(soDesc.getString(stringIDToTypeID('documentID')))
   so.filePath = safeGetString(soDesc, stringIDToTypeID("fileReference"))
 
   if (so.filePath) {
     var parts = so.filePath.replace(/\\/g, "/").split("/")
     so.fileName = parts[parts.length - 1]
   }
-  so.smartObjSourceId = smartObjSourceId
   return so
 }
 

@@ -3,6 +3,7 @@
 #include './math.jsx'
 #include './get.jsx'
 #include './json.jsx'
+#include './md5.jsx'
 
 function Parser() {
   this.app = app
@@ -179,11 +180,10 @@ function parseSmartObject(layer, layerBounds) {
     var ref = new ActionReference()
     ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"))
     var desc = executeActionGet(ref)
-    so.id = stringIDToTypeID("placedLayerExportContents")
-
-
     // 智能对象基本信息
     var soDesc = safeGetObject(desc, stringIDToTypeID("smartObject"))
+    so.id = md5(soDesc.getString(stringIDToTypeID('documentID')))
+
     if (soDesc) {
       so.linked = safeGetBoolean(soDesc, stringIDToTypeID("linked"))
 
