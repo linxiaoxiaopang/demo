@@ -182,7 +182,8 @@ function parseSmartObject(layer, layerBounds) {
     var desc = executeActionGet(ref)
     // 智能对象基本信息
     var soDesc = safeGetObject(desc, stringIDToTypeID("smartObject"))
-    so.id = md5(soDesc.getString(stringIDToTypeID('documentID')))
+    var documentID = getSmartObjectUniqueId(soDesc)
+    so.id = md5(documentID)
 
     if (soDesc) {
       so.linked = safeGetBoolean(soDesc, stringIDToTypeID("linked"))
